@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: woper-relay-drive
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
