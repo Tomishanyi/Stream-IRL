@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>V2 PC · Control</title>
+<style>
+:root{--bg:#0d0d10;--panel:#18181d;--line:#303039;--txt:#efeff1;--muted:#9b9ba7;--purple:#9147ff;--green:#35d07f;--red:#ef4f5f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Arial,sans-serif}
+.wrap{max-width:760px;margin:auto;padding:18px 16px 60px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+h1{font-size:22px;margin:0}.status{font-size:12px;color:#ff9c9c;padding:7px 10px;border:1px solid #ff5d5d44;border-radius:999px;background:#ff5d5d11}
+.status.ok{color:#8af3b6;border-color:#35d07f55;background:#35d07f12}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
+.card h2{font-size:13px;color:#c8c8d0;text-transform:uppercase;letter-spacing:.07em;margin:0 0 11px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.grid.two{grid-template-columns:repeat(2,1fr)}
+button{border:1px solid #3b3b44;border-radius:10px;background:#26262c;color:white;padding:12px 8px;font-weight:800;font-size:13px;cursor:pointer}
+button:hover{background:#303038}
+button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.45)}
+button.primary{background:var(--purple);border-color:var(--purple)}
+button.active{border-color:#9e75ff;background:#3a2858;box-shadow:0 0 0 1px #9147ff55 inset}
+button.warn{background:#523c18;border-color:#8b682d}
+button.end{background:#5a2029;border-color:#ab4453}
+button.green{background:#18482f;border-color:#2f8a5d}button.red{background:#4b1f25;border-color:#9a3946}
+input,textarea,select{width:100%;background:#101014;border:1px solid #3a3a43;border-radius:10px;color:white;padding:11px;font:14px inherit;outline:none}
+textarea{min-height:72px;resize:vertical}.row{display:flex;gap:8px}.row>*{flex:1}.mini{font-size:11px;color:var(--muted);margin-top:7px;line-height:1.4}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.stat{background:#101014;border:1px solid #2a2a32;border-radius:10px;padding:10px}.stat b{display:block;font-size:19px}.stat span{font-size:10px;color:var(--muted)}
+
+hr{border:0;border-top:1px solid #2d2d35;margin:14px 0}
+.controlChatPanel{display:none;margin-top:12px;border:1px solid #303039;border-radius:12px;overflow:hidden;background:#0f0f13}
+.controlChatPanel.show{display:block}
+.controlChatHead{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #2b2b33;background:#15151a}
+.controlChatHead b{font-size:13px}
+.controlChatHead span{font-size:10px;color:var(--muted)}
+.controlChatFeed{height:330px;overflow:auto;padding:10px 10px 14px;background:#111115;font-size:14px;line-height:1.34}
+.controlChatLine{padding:2px 3px;word-break:break-word}
+.controlChatLine .user{font-weight:850}
+.controlChatEmpty{color:#777784;padding:14px 4px;text-align:center;font-size:12px}
+
+@media(max-width:580px){.grid{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><h1>V2 · Control</h1><div class="mini">Prueba PC · esta ventana controla la app/cámara</div></div>
+    <div id="conn" class="status">SIN CÁMARA</div>
+  </div>
+
+  <div class="card">
+    <h2>Sesión</h2>
+    <div class="grid two">
+      <button id="waitBtn" class="primary" onclick="send('waiting')">🕒 ABRIR SALA DE ESPERA</button>
+      <button id="startBtn" class="green" onclick="send('start')">▶ INICIAR STREAM</button>
+      <button onclick="send('camera')">📷 ACTIVAR CÁMARA</button>
+      <button id="chatToggleBtn" onclick="toggleControlChat()">💬 VER CHAT</button>
+      <button onclick="send('reset')">↺ RESET SESIÓN</button>
+      <button id="fiestasBtn" class="active" onclick="toggleFiestas()">🇨🇱 ÚLTIMO FIESTAS: ON</button>
+    </div>
+    <div class="stats" style="margin-top:10px">
+      <div class="stat"><b id="v">0</b><span>VIEWERS</span></div>
+      <div class="stat"><b id="p">0</b><span>PEAK</span></div>
+      <div class="stat"><b id="b">0</b><span>BITS</span></div>
+      <div class="stat"><b id="s">14</b><span>SUBS</span></div>
+    </div>
+    <div id="phaseMini" class="mini" style="font-weight:800;color:#c7a7ff">MOTOR APAGADO</div>
+    <div id="sessionMini" class="mini">Último stream de Fiestas Patrias · Dentro de fonda</div>
+
+    <div id="controlChatPanel" class="controlChatPanel">
+      <div class="controlChatHead">
+        <b>💬 CHAT DEL STREAM</b>
+        <span id="controlChatCount">0 mensajes visibles</span>
+      </div>
+      <div id="controlChatFeed" class="controlChatFeed">
+        <div id="controlChatEmpty" class="controlChatEmpty">Todavía no hay mensajes.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📡 Conexión · 2 celulares</h2>
+    <div class="row">
+      <input id="remoteServer" placeholder="https://tu-servidor.onrender.com">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="remoteRoom" placeholder="Sala, ej. FONDA20">
+      <input id="remoteSecret" type="password" placeholder="Clave privada">
+    </div>
+    <div class="grid two" style="margin-top:8px">
+      <button class="primary" onclick="connectPhoneBridge()">CONECTAR</button>
+      <button onclick="disconnectPhoneBridge()">DESCONECTAR</button>
+    </div>
+    <div class="stats" style="margin-top:10px">
+      <div class="stat"><b id="backendState">OFF</b><span>SERVIDOR</span></div>
+      <div class="stat"><b id="cameraState">OFF</b><span>CAMERA</span></div>
+    </div>
+    <div id="bridgeMini" class="mini">En ambos teléfonos usa la misma URL, sala y clave. CAMERA guarda su configuración localmente.</div>
+  </div>
+
+  <div class="card">
+    <h2>🎥 Grabación / Drive</h2>
+    <div class="row">
+      <select id="segmentSeconds" onchange="setSegmentDuration()">
+        <option value="20" selected>20 s · prueba</option>
+        <option value="300">5 min · final</option>
+      </select>
+    </div>
+
+    <div class="grid two">
+      <button id="recStartBtn" class="green" onclick="send('recordStart10')">● INICIAR GRABACIÓN</button>
+      <button id="recStopBtn" class="red" onclick="send('recordStop')">■ DETENER GRABACIÓN</button>
+    </div>
+    <div class="stats" style="margin-top:10px">
+      <div class="stat"><b id="recState">OFF</b><span>ESTADO</span></div>
+      <div class="stat"><b id="recSeg">0</b><span>SEGMENTO</span></div>
+      <div class="stat"><b id="recAge">00:00</b><span>TIEMPO TOTAL</span></div>
+      <div class="stat"><b id="recSize">—</b><span>ÚLTIMO ARCHIVO</span></div>
+    </div>
+    <div id="recMini" class="mini">1280×720 · 30 fps · 2.5 Mbps · micrófono + cámara + chat/overlays. Con backend configurado, cada segmento se sube automáticamente a Drive.</div>
+  </div>
+
+  <div class="card">
+    <h2>👁 Director de viewers</h2>
+    <div class="row">
+      <input id="viewerTarget" type="number" min="0" max="5000" value="300" placeholder="Objetivo">
+      <button class="primary" onclick="setViewerTarget()">IR A OBJETIVO</button>
+    </div>
+    <div class="grid" style="margin-top:8px">
+      <button onclick="viewerNudge(-100)">-100</button>
+      <button onclick="viewerNudge(-25)">-25</button>
+      <button onclick="viewerNudge(25)">+25</button>
+      <button onclick="viewerNudge(100)">+100</button>
+      <button id="viewerAutoBtn" class="active" onclick="viewerMode('auto')">♻ AUTO</button>
+      <button id="viewerLockBtn" onclick="viewerMode('locked')">🔒 FIJAR</button>
+    </div>
+    <div class="grid" style="margin-top:8px">
+      <button onclick="send('viewerBoost')">📈 BOOST</button>
+      <button onclick="send('viewerDrop')">📉 BAJADA</button>
+      <button class="warn" onclick="send('viewerViral')">🔥 MOMENTO VIRAL</button>
+    </div>
+    <div class="row" style="margin-top:8px;align-items:center">
+      <select id="viewerSpeed" onchange="setViewerSpeed()">
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x normal</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+        <option value="3">3x</option>
+      </select>
+      <div id="viewerModeText" class="mini" style="margin:0">AUTO · 1x</div>
+    </div>
+    <div class="mini">OBJETIVO y +/- mueven la audiencia gradualmente. FIJAR mantiene aproximadamente el nivel actual. Viral dura ~10 min y también alimenta mensajes de gente recién llegada.</div>
+  </div>
+
+  <div class="card">
+    <h2>Contexto de terreno</h2>
+    <div class="grid two">
+      <button id="venueInside" class="active" onclick="venue('inside')">🏕 DENTRO FONDA</button>
+      <button id="venueOutside" onclick="venue('outside')">🚪 NOS ECHARON / AFUERA</button>
+      <button id="venueWalking" onclick="venue('walking')">🚶 CAMINANDO</button>
+      <button onclick="send('recognition')">📸 NOS RECONOCEN / FOTOS</button>
+    </div>
+    <div id="venueMini" class="mini">Dentro de una fonda.</div>
+  </div>
+
+  <div class="card">
+    <h2>Despedida / cierre</h2>
+    <div class="grid">
+      <button class="warn" onclick="send('farewell1')">👋 AVISAR QUE NOS VAMOS</button>
+      <button class="primary" onclick="send('farewell2')">❤️ DESPEDIDA FINAL · 2 MIN</button>
+      <button class="end" onclick="send('closeFinal')">⛔ CERRAR STREAM</button>
+    </div>
+    <div id="farewellMini" class="mini">Normal. El primer aviso no tiene tiempo límite. La despedida final dura ~2 minutos y NO cierra automáticamente.</div>
+  </div>
+
+  <div class="card">
+    <h2>Contexto rápido</h2>
+    <div class="grid">
+      <button onclick="eventCmd('w')">W</button>
+      <button onclick="eventCmd('lol')">😂 LOL</button>
+      <button onclick="eventCmd('rizz')">💘 RIZZ</button>
+      <button onclick="eventCmd('drink')">🍹 TERREMOTO</button>
+      <button onclick="eventCmd('people')">👥 GENTE</button>
+      <button onclick="eventCmd('local')">🔥 LOCAL</button>
+      <button onclick="eventCmd('gift')">🎁 REGALO</button>
+      <button onclick="eventCmd('bits')">💎 BITS</button>
+      <button onclick="eventCmd('fail')">F</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Hablar como streamer</h2>
+    <textarea id="ownerText" placeholder="cabros tequilazos si o no"></textarea>
+    <button class="primary" style="width:100%;margin-top:8px" onclick="ownerSay()">ENVIAR AL CHAT</button>
+  </div>
+
+  <div class="card">
+    <h2>👂 MIC / OÍDO</h2>
+    <textarea id="earText" placeholder="ej: chat que hacemos ahora? / chat vieron eso? / se llama Sofi / nos regalaron copete"></textarea>
+    <button style="width:100%;margin-top:8px" onclick="earSay()">ENVIAR COMO SI LO DIJERA AL MIC</button>
+    <div class="mini">No aparece escrito. Si hablas directamente al chat, la conversación cambia de tema y te responde con prioridad.</div>
+  </div>
+
+  <div class="card">
+    <h2>Poll · 2 a 4 opciones</h2>
+    <input id="pollQ" value="¿Qué tomamos ahora?" placeholder="Pregunta">
+    <div class="row" style="margin-top:8px">
+      <input id="pollA" value="Terremoto" placeholder="Opción 1">
+      <input id="pollB" value="Tequila" placeholder="Opción 2">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="pollC" placeholder="Opción 3 · opcional">
+      <input id="pollD" placeholder="Opción 4 · opcional">
+    </div>
+    <div class="grid two" style="margin-top:8px">
+      <button class="primary" onclick="poll()">CREAR POLL</button>
+      <button onclick="pollYesNo()">SÍ / NO RÁPIDO</button>
+    </div>
+    <div id="pollHint" class="mini">Ejemplo: “¿Qué tomamos?” → Terremoto / Tequila.</div>
+  </div>
+
+  <div class="card">
+    <h2>Alertas manuales</h2>
+    <div class="row">
+      <input id="bitAmount" type="number" min="1" max="500" value="67">
+      <input id="bitMsg" value="SIIIIIIIXSEVEEEN">
+    </div>
+    <button style="width:100%;margin-top:8px" onclick="bit()">LANZAR BITS</button>
+    <hr>
+    <div class="row">
+      <input id="subMonths" type="number" min="1" max="36" value="3">
+      <button onclick="sub()">LANZAR SUB</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Campo</h2>
+    <div class="grid">
+      <button onclick="field('normal')">NORMAL</button>
+      <button onclick="field('brb')">BRB</button>
+      <button onclick="field('signal')">SEÑAL</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Prueba temporal</h2>
+    <button style="width:100%" onclick="send('friendsIntro')">👥 PRESENTAR AMIGOS</button>
+    <div class="mini">Este botón viene de la prueba de Noche 2 y luego se reemplazará por el roster genérico de V2.</div>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+const ch=new BroadcastChannel("woper-v2-pc-alpha");
+let lastPong=0,lastState=0;
+let remoteSocket=null;
+let remoteConnected=false;
+let remoteCameraOnline=false;
+
+function commandId(){
+  return `${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+}
+
+function send(cmd,data={}){
+  const msg={type:"cmd",cmd,id:commandId(),...data};
+  try{ch.postMessage(msg)}catch(e){}
+  try{if(remoteConnected)remoteSocket?.emit("relay",msg)}catch(e){}
+}
+
+function normServer(v){return String(v||"").trim().replace(/\/+$/,"")}
+
+function loadBridgeConfig(){
+  document.getElementById("remoteServer").value=localStorage.getItem("woper_server")||"";
+  document.getElementById("remoteRoom").value=localStorage.getItem("woper_room")||"";
+  document.getElementById("remoteSecret").value=localStorage.getItem("woper_secret")||"";
+}
+
+function updateBridgeUI(){
+  document.getElementById("backendState").textContent=remoteConnected?"ON":"OFF";
+  document.getElementById("cameraState").textContent=remoteCameraOnline?"ON":"OFF";
+  document.getElementById("bridgeMini").textContent=remoteConnected
+    ?(remoteCameraOnline?"Servidor conectado · CAMERA online ✓":"Servidor conectado · esperando CAMERA…")
+    :"Sin conexión remota. BroadcastChannel local sigue disponible para pruebas en PC.";
+}
+
+function connectPhoneBridge(){
+  const server=normServer(document.getElementById("remoteServer").value);
+  const room=String(document.getElementById("remoteRoom").value||"").trim();
+  const secret=String(document.getElementById("remoteSecret").value||"").trim();
+
+  if(!server||!room||!secret){
+    document.getElementById("bridgeMini").textContent="Completa servidor, sala y clave.";
+    return;
+  }
+  if(typeof io!=="function"){
+    document.getElementById("bridgeMini").textContent="No cargó Socket.IO. Revisa internet.";
+    return;
+  }
+
+  localStorage.setItem("woper_server",server);
+  localStorage.setItem("woper_room",room);
+  localStorage.setItem("woper_secret",secret);
+
+  try{remoteSocket?.disconnect()}catch(e){}
+
+  remoteSocket=io(server,{
+    transports:["websocket","polling"],
+    auth:{room,secret,role:"control"},
+    reconnection:true,
+    reconnectionDelay:800,
+    reconnectionDelayMax:5000
+  });
+
+  remoteSocket.on("connect",()=>{
+    remoteConnected=true;
+    updateBridgeUI();
+    send("ping");
+  });
+  remoteSocket.on("disconnect",()=>{
+    remoteConnected=false;
+    remoteCameraOnline=false;
+    updateBridgeUI();
+  });
+  remoteSocket.on("connect_error",err=>{
+    remoteConnected=false;
+    document.getElementById("bridgeMini").textContent="Error: "+(err?.message||"no conecta");
+    updateBridgeUI();
+  });
+  remoteSocket.on("relay",handleIncoming);
+  remoteSocket.on("presence",p=>{
+    const roomNow=String(document.getElementById("remoteRoom").value||"").trim();
+    if(p?.room!==roomNow)return;
+    remoteCameraOnline=!!p.camera;
+    updateBridgeUI();
+  });
+}
+
+function disconnectPhoneBridge(){
+  try{remoteSocket?.disconnect()}catch(e){}
+  remoteSocket=null;
+  remoteConnected=false;
+  remoteCameraOnline=false;
+  updateBridgeUI();
+}
+
+function setSegmentDuration(){
+  const seconds=Number(document.getElementById("segmentSeconds").value)||20;
+  send("recordSegmentSeconds",{seconds});
+}
+
+
+let controlChatOpen=false;
+let controlChatEntries=[];
+
+function toggleControlChat(){
+  controlChatOpen=!controlChatOpen;
+  const panel=document.getElementById("controlChatPanel");
+  const btn=document.getElementById("chatToggleBtn");
+  panel?.classList.toggle("show",controlChatOpen);
+  if(btn)btn.textContent=controlChatOpen?"💬 OCULTAR CHAT":"💬 VER CHAT";
+  if(controlChatOpen){
+    renderControlChat(true);
+  }
+}
+
+function sameChatEntry(a,b){
+  return a && b && a.ts===b.ts && a.user===b.user && a.text===b.text;
+}
+
+function setControlChatHistory(entries){
+  if(!Array.isArray(entries))return;
+  controlChatEntries=entries.slice(-60);
+  renderControlChat(false);
+}
+
+function appendControlChat(entry){
+  if(!entry)return;
+  const last=controlChatEntries[controlChatEntries.length-1];
+  if(sameChatEntry(last,entry))return;
+  controlChatEntries.push(entry);
+  if(controlChatEntries.length>60)controlChatEntries.shift();
+
+  const feed=document.getElementById("controlChatFeed");
+  if(!feed)return;
+
+  document.getElementById("controlChatEmpty")?.remove();
+  const d=document.createElement("div");
+  d.className="controlChatLine";
+  d.innerHTML=`<span class="user" style="color:${entry.color||"#efeff1"}">${entry.user||""}</span>: ${entry.html??entry.text??""}`;
+  feed.appendChild(d);
+
+  while(feed.children.length>60)feed.removeChild(feed.firstChild);
+  document.getElementById("controlChatCount").textContent=`${controlChatEntries.length} recientes`;
+
+  if(controlChatOpen){
+    feed.scrollTop=feed.scrollHeight;
+  }
+}
+
+function renderControlChat(forceBottom=false){
+  const feed=document.getElementById("controlChatFeed");
+  if(!feed)return;
+  feed.innerHTML="";
+
+  if(!controlChatEntries.length){
+    feed.innerHTML='<div id="controlChatEmpty" class="controlChatEmpty">Todavía no hay mensajes.</div>';
+    document.getElementById("controlChatCount").textContent="0 mensajes visibles";
+    return;
+  }
+
+  for(const entry of controlChatEntries){
+    const d=document.createElement("div");
+    d.className="controlChatLine";
+    d.innerHTML=`<span class="user" style="color:${entry.color||"#efeff1"}">${entry.user||""}</span>: ${entry.html??entry.text??""}`;
+    feed.appendChild(d);
+  }
+  document.getElementById("controlChatCount").textContent=`${controlChatEntries.length} recientes`;
+  if(forceBottom || controlChatOpen)feed.scrollTop=feed.scrollHeight;
+}
+function recFmt(ms){
+  const s=Math.max(0,Math.floor((ms||0)/1000));
+  return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+}
+function waitFmt(ms){
+  const s=Math.max(0,Math.floor((ms||0)/1000));
+  return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+}
+function eventCmd(event){send("event",{event})}
+function field(value){send("field",{value})}
+
+let fiestasOn=true;
+function toggleFiestas(){
+  fiestasOn=!fiestasOn;
+  send("sessionFiestas",{value:fiestasOn});
+  const b=document.getElementById("fiestasBtn");
+  b.textContent=`🇨🇱 ÚLTIMO FIESTAS: ${fiestasOn?"ON":"OFF"}`;
+  b.classList.toggle("active",fiestasOn);
+}
+
+function venue(value){
+  send("venue",{value});
+  ["inside","outside","walking"].forEach(v=>{
+    const id=v==="inside"?"venueInside":v==="outside"?"venueOutside":"venueWalking";
+    document.getElementById(id)?.classList.toggle("active",v===value);
+  });
+}
+
+function viewerMode(mode){
+  send("viewerMode",{mode});
+}
+function setViewerTarget(){
+  const value=+document.getElementById("viewerTarget").value;
+  send("viewerTarget",{value});
+}
+function viewerNudge(delta){send("viewerNudge",{delta})}
+function setViewerSpeed(){
+  send("viewerSpeed",{value:+document.getElementById("viewerSpeed").value});
+}
+function ownerSay(){
+  const el=document.getElementById("ownerText"); const text=el.value.trim();
+  if(text){send("owner",{text});el.value=""}
+}
+function earSay(){
+  const el=document.getElementById("earText"); const text=el.value.trim();
+  if(text){send("ear",{text});el.value=""}
+}
+function poll(){
+  const question=document.getElementById("pollQ").value.trim()||"¿Qué dicen, chat?";
+  const options=["pollA","pollB","pollC","pollD"]
+    .map(id=>document.getElementById(id).value.trim())
+    .filter(Boolean);
+  const hint=document.getElementById("pollHint");
+  if(options.length<2){
+    hint.textContent="Necesitas al menos 2 opciones.";
+    return;
+  }
+  hint.textContent=`Poll enviada: ${options.join(" / ")}`;
+  send("poll",{question,options});
+}
+function pollYesNo(){
+  const question=document.getElementById("pollQ").value.trim()||"¿Sí o no?";
+  send("poll",{question,options:["SÍ","NO"]});
+  document.getElementById("pollHint").textContent="Poll SÍ / NO enviada.";
+}
+function bit(){send("bit",{amount:+document.getElementById("bitAmount").value,message:document.getElementById("bitMsg").value.trim()})}
+function sub(){send("sub",{months:+document.getElementById("subMonths").value})}
+function handleIncoming(raw){
+  const m=raw?.data??raw??{};
+  if(m.type==="pong"){lastPong=Date.now();return}
+  if(m.type==="chatLine"){
+    appendControlChat(m.entry);
+    return;
+  }
+  if(m.type==="state"){
+    lastState=Date.now(); lastPong=Date.now();
+    document.getElementById("v").textContent=m.viewers??0;
+    document.getElementById("p").textContent=m.peak??0;
+    document.getElementById("b").textContent=m.bits??0;
+    document.getElementById("s").textContent=m.subs??0;
+
+    if(Array.isArray(m.chatHistory)){
+      const incoming=m.chatHistory;
+      const lastIncoming=incoming[incoming.length-1];
+      const lastLocal=controlChatEntries[controlChatEntries.length-1];
+      if(
+        incoming.length!==controlChatEntries.length ||
+        (lastIncoming && !sameChatEntry(lastIncoming,lastLocal))
+      ){
+        setControlChatHistory(incoming);
+      }
+    }
+
+    const phase=m.phase||"offline";
+    const waitBtn=document.getElementById("waitBtn");
+    const startBtn=document.getElementById("startBtn");
+    const phaseMini=document.getElementById("phaseMini");
+
+    if(waitBtn){
+      waitBtn.disabled=phase!=="offline";
+      waitBtn.classList.toggle("active",phase==="engine");
+      waitBtn.textContent=phase==="engine"
+        ?"🕒 SALA DE ESPERA ABIERTA"
+        :"🕒 ABRIR SALA DE ESPERA";
+    }
+
+    if(startBtn){
+      startBtn.disabled=phase!=="engine";
+      startBtn.classList.toggle("active",phase==="live");
+    }
+
+    if(phaseMini){
+      phaseMini.textContent=phase==="engine"
+        ?`🕒 SALA DE ESPERA · ${waitFmt(m.waitingAge||0)}`
+        :phase==="live"
+          ?"🔴 STREAM EN VIVO"
+          :phase==="offline"
+            ?"MOTOR APAGADO"
+            :"FINALIZANDO";
+    }
+
+    const ctx=m.sessionContext||{};
+    fiestasOn=ctx.lastFiestasStream!==false;
+    const fiestasBtn=document.getElementById("fiestasBtn");
+    if(fiestasBtn){
+      fiestasBtn.textContent=`🇨🇱 ÚLTIMO FIESTAS: ${fiestasOn?"ON":"OFF"}`;
+      fiestasBtn.classList.toggle("active",fiestasOn);
+    }
+
+    const venue=ctx.venue||"inside";
+    ["inside","outside","walking"].forEach(v=>{
+      const id=v==="inside"?"venueInside":v==="outside"?"venueOutside":"venueWalking";
+      document.getElementById(id)?.classList.toggle("active",v===venue);
+    });
+
+    const venueText=venue==="walking"?"Caminando afuera.":
+                    venue==="outside"?"Afuera / nos echaron de la fonda.":
+                    "Dentro de una fonda.";
+    document.getElementById("venueMini").textContent=venueText+(ctx.recognized?" · Gente nos reconoció recientemente.":"");
+    const phaseLabel=phase==="engine"
+      ?"Previa abierta"
+      :phase==="live"
+        ?"En vivo"
+        :"Sin iniciar";
+    document.getElementById("sessionMini").textContent=
+      `${phaseLabel} · ${fiestasOn?"Último stream de Fiestas Patrias":"Sesión normal"} · ${venueText}`;
+
+    const fs=m.farewellStage||0;
+    const farewellText=fs===1?"AVISO ACTIVO · la gente todavía no quiere que corten.":
+                       fs===2?"DESPEDIDA FINAL EN CURSO · ~2 minutos.":
+                       fs===3?"DESPEDIDA COMPLETA · listo para pulsar CERRAR STREAM.":
+                       fs===4?"STREAM CERRADO.":
+                       "Normal. El primer aviso no tiene tiempo límite. La despedida final dura ~2 minutos y NO cierra automáticamente.";
+    document.getElementById("farewellMini").textContent=farewellText;
+
+    const vc=m.viewerControl||{};
+    const mode=vc.mode||"auto";
+    document.getElementById("viewerAutoBtn")?.classList.toggle("active",mode==="auto");
+    document.getElementById("viewerLockBtn")?.classList.toggle("active",mode==="locked");
+    if(mode==="target" && vc.target!=null)document.getElementById("viewerTarget").value=vc.target;
+    if(vc.speed)document.getElementById("viewerSpeed").value=String(vc.speed);
+
+    let modeText=mode==="target"?`OBJETIVO ${vc.target}`:mode==="locked"?`FIJO ~${vc.lockCenter}`:"AUTO";
+    if(vc.boost)modeText+=" · BOOST";
+    if(vc.drop)modeText+=" · BAJADA";
+    if(vc.viral)modeText+=" · 🔥 VIRAL";
+    modeText+=` · ${vc.speed||1}x`;
+    document.getElementById("viewerModeText").textContent=modeText;
+
+    const rec=m.recording||{};
+    const isRec=!!rec.active;
+    document.getElementById("recState").textContent=isRec?"REC":"OFF";
+    document.getElementById("recSeg").textContent=rec.segment||0;
+    document.getElementById("recAge").textContent=recFmt(rec.totalAge||0);
+    document.getElementById("recSize").textContent=rec.lastBytes
+      ?(rec.lastBytes/1024/1024).toFixed(1)+" MB"
+      :"—";
+    document.getElementById("recStartBtn")?.classList.toggle("active",isRec);
+    document.getElementById("segmentSeconds").value=String(rec.segmentSeconds||20);
+    let recText=`${rec.format||"1280×720 · 30 fps · 2.5 Mbps"} · bloques de ${rec.segmentSeconds||20} s.`;
+    if(rec.lastFile)recText+=` Último local: ${rec.lastFile}.`;
+    if(rec.uploadStatus==="uploading")recText+=` ☁️ Subiendo a Drive… (${rec.uploadPending||1} pendiente).`;
+    else if(rec.uploadStatus==="ok")recText+=` ☁️ Drive ✓ ${rec.lastUploadFile||""}`;
+    else if(rec.uploadStatus==="error")recText+=` ⚠️ Drive falló; se descargó backup local. ${rec.uploadError||""}`;
+    else if(rec.uploadStatus==="local")recText+=` Sin backend Drive: guardando localmente.`;
+    if(rec.lastError)recText+=` ERROR REC: ${rec.lastError}`;
+    else if(isRec)recText+=` Segmento ${rec.segment||1} grabando…`;
+    document.getElementById("recMini").textContent=recText;
+  }
+}
+ch.onmessage=handleIncoming;
+setInterval(()=>{
+  send("ping");
+  const ok=Date.now()-lastPong<4500;
+  const c=document.getElementById("conn");
+  c.textContent=ok?"CÁMARA CONECTADA":"SIN CÁMARA";
+  c.classList.toggle("ok",ok);
+},1200);
+document.getElementById("ownerText").addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();ownerSay()}
+});
+document.getElementById("earText").addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();earSay()}
+});
+loadBridgeConfig();
+updateBridgeUI();
+setTimeout(()=>{
+  const server=normServer(document.getElementById("remoteServer").value);
+  const room=String(document.getElementById("remoteRoom").value||"").trim();
+  const secret=String(document.getElementById("remoteSecret").value||"").trim();
+  if(server&&room&&secret)connectPhoneBridge();
+},300);
+
+</script>
+</body>
+</html>
